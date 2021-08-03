@@ -1,0 +1,112 @@
+#!/bin/bash
+
+CASE_NAME=UNKNOWN
+NOVNC_URL='http://mycuster/kanaka-noVNC-33e1462/vnc_auto.html'
+
+CASE_SCRIPT=$(realpath ${1:-case_config.ini})
+SITE_SCRIPT=$(realpath ${2:-site_config.ini})
+TileSet=${3:-defaulTS}
+
+# get case-specifig config paths (overriding defaults)
+if [ -f "${CASE_SCRIPT}" ]; then
+  sed -e "s@\[CASE\]@#!/bin/bash@" "${CASE_SCRIPT}" > case_config
+  . case_config
+fi
+
+# get site-specifig config paths (overriding defaults)
+if [ -f "${SITE_SCRIPT}" ]; then
+  sed -e "s@\[SITE\]@#!/bin/bash@" "${SITE_SCRIPT}" > site_config
+  . site_config
+fi
+
+FILEPATH=./list_dockers_pass
+
+NUM=$( wc -l ${FILEPATH}| sed -e "s}^\([0-9]*\).*}\1}" )
+
+function min {
+   ( [ $1 -le $2 ] && echo $1 ) || ( [ $2 -lt $1 ] && echo $2 ) 
+}
+
+DATE=$(date +%F_%H-%M-%S)
+
+function tag_int() {
+    local line=$1
+    local lineid=$2
+    local name=$3
+    local tagid=$4
+    local out=${tagid}_$(eval echo \${$line[$lineid]} |sed -e "s&\ &_&g" -e "s/.*$name=\"\(.*\)\".*/\1/")
+    echo $out
+}
+
+function tag_real() {
+    local line=$1
+    local lineid=$2
+    local name=$3
+    local tagid=$4
+    local out=$(eval echo \${$line[$lineid]} |sed -e "s&\ &_&g" -e "s/.*$name=\"\(.*\)\".*/\1/" -e "s/{/{${tagid}_/")
+    echo $out
+}
+
+
+echo '{ "nodes": [' > nodes.json
+#echo 'echo '' >> nodes.json' >> nodes.json
+i=0
+while IFS='' read -r -u3 line && IFS='' read -r -u4 line2 || [[ -n "$line" ]]; do
+  if [ X"${line}" == X"" ]; then  
+      echo "error too old passord file."
+      rm -f nodes.json
+      exit 2
+  fi
+
+  i2=$((2*(i+1)))
+  i0=$(printf "%03d" $((i+1)))
+  thishost=${line% *}
+  pass=${line##* }
+  
+  IFS=' ' read -r -a aline <<<${line2}
+  # line=$(echo ${line2} |sed -e 's/"/$/g')
+  # IFS='$' read -r -a aline <<<$line
+  # echo ${aline[0]}
+  # echo ${aline[1]}
+
+    # ID (for the url)
+  tile_id=${aline[0]}
+#$(echo ${aline[0]} |sed -e "s/^\([0-9]*\) .*/\1/")
+    # File name goes in the "info" field of nodes.json
+  file_name=$(echo ${aline[1]} |sed -e "s&\ &_&g" -e "s/.*File=\"\(.*\)\".*/\1/")
+    # Commentaire/notes  
+#   reactants=$(tag_int "aline" 2 "Reactants" 1)
+# #\([0-9A-Z]*\)p_\([0-9A-Z]*\)\".*/1_\1_+_\2/")
+#   products=$(tag_int "aline" 3 "Products" 2)
+#   type_=$(tag_int "aline" 5 "Type" 3)
+#   method=$(tag_int "aline" 7 "Method" 4)
+#   impfact=$(tag_real "aline" 8 "Impact_factor" 5)
+#   energy=$(tag_real "aline" 4 "Energy" 6)
+#   temp=$(tag_real "aline" 9 "Temperature" 7)
+#   final=$(tag_real "aline" 6 "Final_time" 8)
+
+  if [ $i -gt 0 ]; then
+      echo '},' >> nodes.json
+  fi
+  echo '{"title" : "'$i0' '$file_name'" ,' >> nodes.json
+  echo '  "variable" : "ID-'$i0'_'$file_name'",' >> nodes.json
+
+  URL=$(echo $NOVNC_URL | envsubst) # expand envars in $NOVNC_URL
+  echo ' "url" : "'${URL}'?host='${HTTP_FRONTEND}'&port='${SOCKETdomain}${i0}'&encrypt=0&password='${pass}'&true_color=1",' >> nodes.json
+  echo ' "comment" : "'$( echo $line2| sed -e s/\"//g )' '${DATE}'",' >> nodes.json
+  echo ' "usersNotes"  : "This is node '$i'  : Docker host '${thishost}' and noVNC server for file '${file_name}'",' >> nodes.json
+  echo ' "tags"  : ["'$TileSet'"],' >> nodes.json
+#, "'$reactants'", "'$products'", "'$energy'", "'$type_'", "'$method'", "'$impfact'",  "'$temp'", "'$final'"
+  echo '"connection" : 1' >> nodes.json
+
+  i=$(( i + 1 ))
+done 3< list_dockers_pass 4<tagliste
+
+echo '}' >> nodes.json
+echo '] }' >> nodes.json
+
+echo "var text_ = " > nodes.js
+cat nodes.json >> nodes.js
+echo 'var jsDataTab = text_.nodes;' >> nodes.js
+
+exit 0
