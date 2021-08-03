@@ -1,12 +1,13 @@
 #!/bin/bash
 cd /home/myuser/CASE
 DATA_PATH_DOCKER=${1:-}
-file_name=${2:-15.xyz}
+dir_name=${2:-15.xyz}
 
 
 echo ${DOCKERID}; export DISPLAY=:1;
-
-paraview > ~/.vnc/out_paraview 2>&1 &
+cd /datas/$dir_name
+pwd > ~/.vnc/out_paraview
+paraview >> ~/.vnc/out_paraview 2>&1 &
 #/dev/null 2>&1 &
 
 i=0

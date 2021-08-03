@@ -6,6 +6,11 @@ import sys,os,time
 import code
 import argparse
 import re, datetime
+import inspect
+
+# sys.path.append(os.path.realpath('/TiledViz/TVConnections/'))
+# from connect import sock
+
 import json
 
 if (os.path.exists("config.tar")):
@@ -91,6 +96,7 @@ try:
     CASE_config=os.path.join(JOBPath,CASE_config)
     send_file_server(client,TileSet,".", SITE_config, JOBPath)
     SITE_config=os.path.join(JOBPath,os.path.basename(SITE_config))
+    send_file_server(client,TileSet,".", "tagliste", JOBPath)
     send_file_server(client,TileSet,".", "list_hostsgpu", JOBPath)
 
 except:
@@ -124,7 +130,9 @@ print("\n"+COMMANDStop)
 sys.stdout.flush()
 
 # Launch dockers
+stateVM=True
 def Run_dockers():
+    global stateVM
     COMMAND="bash -c \""+os.path.join(TILEDOCKERS_path,"launch_dockers")+" "+REF_CAS+" "+GPU_FILE+" "+HTTP_FRONTEND+":"+HTTP_IP+\
             " "+network+" "+nethost+" "+domain+" "+init_IP+" TileSetPort "+UserFront+"@"+Frontend+" "+OPTIONS+\
             " > "+os.path.join(JOBPath,"output_launch")+" 2>&1 \"" 
@@ -132,14 +140,24 @@ def Run_dockers():
     print("\nCommand dockers : "+COMMAND)
 
     client.send_server(LaunchTS+' '+COMMAND)
-    print("Out of launch dockers : "+ str(client.get_OK()))
+    state=client.get_OK()
+    stateVM=stateVM and (state == 0)
+    print("Out of launch docker : "+ str(state))
     sys.stdout.flush()
 
 Run_dockers()
 sys.stdout.flush()
 
+taglist = open("tagliste", "r")
+# TODO : give a liste of lines !
+# tab=taglist.readlines()
+# line=tab[123]
+# file_name=(line[1].split('='))[1].replace('"','')
+
+
 # Build nodes.json file from new dockers list
 def build_nodes_file():
+    global stateVM
     print("Build nodes.json file from new dockers list.")
     # COMMAND=LaunchTS+' chmod u+x build_nodes_file '
     # client.send_server(COMMAND)
@@ -149,48 +167,72 @@ def build_nodes_file():
     print("\nCommand dockers : "+COMMAND)
 
     client.send_server(COMMAND)
-    print("Out of build_nodes_file : "+ str(client.get_OK()))
+    state=client.get_OK()
+    stateVM=stateVM and (state == 0)
+    print("Out of build_nodes_file : "+ str(state))
     time.sleep(2)
 
-build_nodes_file()
+if (stateVM):
+    build_nodes_file()
 sys.stdout.flush()
 
 time.sleep(2)
 # Launch docker tools
 def launch_resize(RESOL="1440x900"):
     client.send_server(ExecuteTS+' xrandr --fb '+RESOL)
-    print("Out of xrandr : "+ str(client.get_OK()))
+    state=client.get_OK()
+    print("Out of xrandr : "+ str(state))
 
-launch_resize()
+if (stateVM):
+    launch_resize()
 sys.stdout.flush()
 
 def launch_tunnel():
+    global stateVM
     # Call tunnel for VNC
     client.send_server(ExecuteTS+' /opt/tunnel_ssh '+HTTP_FRONTEND+' '+HTTP_LOGIN)
-    print("Out of tunnel_ssh : "+ str(client.get_OK()))
+    state=client.get_OK()
+    stateVM=stateVM and (state == 0)
+    print("Out of tunnel_ssh : "+ str(state))
+    if (not stateVM):
+        return
+
     # Get back PORT
     for i in range(NUM_DOCKERS):
         i0="%0.3d" % (i+1)
         client.send_server(ExecuteTS+' Tiles=('+containerId(i+1)+') '+
                            'bash -c "cat .vnc/port |xargs -I @ sed -e \"s#port='+SOCKETdomain+i0+'#port=@#\" -i CASE/nodes.json"')
-        print("Out of change port %s : " % (i0) + str(client.get_OK()))
+        state=client.get_OK()
+        stateVM=stateVM and (state == 0)
+        print("Out of change port %s : " % (i0) + str(state))
+    if (not stateVM):
+        return
 
     sys.stdout.flush()
+    if (not stateVM):
+        return
     launch_nodes_json()
 
-launch_tunnel()
+if (stateVM):
+    launch_tunnel()
 sys.stdout.flush()
 
 def launch_vnc():
+    global stateVM
     client.send_server(ExecuteTS+' /opt/vnccommand')
-    print("Out of vnccommand : "+ str(client.get_OK()))
+    state=client.get_OK()
+    stateVM=stateVM and (state == 0)
+    print("Out of vnccommand : "+ str(state))
 
-launch_vnc()
+if (stateVM):
+    launch_vnc()
 sys.stdout.flush()
 
 
 def launch_one_client(script='paraview_client',tileNum=-1,tileId='001'):
-    COMMAND=' '+os.path.join(CASE_DOCKER_PATH,script)
+    line=taglist.readline().split(' ')
+    dir_name=(line[1].split('='))[2].replace('"','')
+    COMMAND=' '+os.path.join(CASE_DOCKER_PATH,script)+' '+DATA_PATH_DOCKER+' '+dir_name
     if ( tileNum > -1 ):
         TilesStr=' Tiles=('+containerId(tileNum+1)+') '
     else:
@@ -200,20 +242,22 @@ def launch_one_client(script='paraview_client',tileNum=-1,tileId='001'):
     client.send_server(CommandTS)        
     client.get_OK()
 
-def launch_client_global(script='paraview_client'):
-    COMMAND=' '+os.path.join(CASE_DOCKER_PATH,script)
-    print("launch command on all tiles : %s" % (COMMAND))
-    sys.stdout.flush()
-    CommandTS=ExecuteTS+COMMAND
-    client.send_server(CommandTS)
+# TODO : give a list of lines !
+def Run_clients():
+    for i in range(NUM_DOCKERS):
+        launch_one_client(tileNum=i)
+    Last_Elt=NUM_DOCKERS-1
 
-    client.get_OK()
-
-launch_client_global(script='paraview_client')
+if (stateVM):
+    Run_clients()
+sys.stdout.flush()
 
 def next_element(script='paraview_client',tileNum=-1,tileId='001'):
-    COMMAND=' '+os.path.join(CASE_DOCKER_PATH,script)
-    COMMANDKill=' killall -9 glxgears'
+    line2=taglist.readline()
+    line=line2.split(' ')
+    dir_name=(line[1].split('='))[2].replace('"','')
+    COMMAND=' '+os.path.join(CASE_DOCKER_PATH,script)+' '+DATA_PATH_DOCKER+' '+dir_name
+    COMMANDKill=' killall -9 paraview'
     if ( tileNum > -1 ):
         tileId=containerId(tileNum+1)
     else:
@@ -233,17 +277,13 @@ def next_element(script='paraview_client',tileNum=-1,tileId='001'):
     nodes=json.load(nodesf)
     nodesf.close()
 
-    import socket
-    hostname=socket.gethostname()
-
-    nodes["nodes"][tileNum]["title"]=tileId+" "+hostname
+    nodes["nodes"][tileNum]["title"]=tileId+" "+dir_name
     if ("variable" in nodes["nodes"][tileNum]):
-        nodes["nodes"][tileNum]["variable"]="ID-"+tileId+"_"+hostname
-    nodes["nodes"][tileNum]["comment"]="New comment for tile "+tileId
-    # if ("usersNotes" in nodes["nodes"][tileNum]):
-    #     nodes["nodes"][tileNum]["usersNotes"]=re.sub(r'file .*',"New Element host "+hostname,
-    #                                                  nodes["nodes"][tileNum]["usersNotes"])
-    nodes["nodes"][tileNum]["usersNotes"]="New Element host "+hostname
+        nodes["nodes"][tileNum]["variable"]="ID-"+tileId+"_"+dir_name
+    nodes["nodes"][tileNum]["comment"]=line2
+    if ("usersNotes" in nodes["nodes"][tileNum]):
+        nodes["nodes"][tileNum]["usersNotes"]=re.sub(r'dir .*',"dir "+dir_name,
+                                                     nodes["nodes"][tileNum]["usersNotes"])
     nodes["nodes"][tileNum]["tags"]=[]
     nodes["nodes"][tileNum]["tags"].append(TileSet)
     nodes["nodes"][tileNum]["tags"].append("NewElement")
@@ -277,6 +317,13 @@ def remove_element(script='paraview_client',tileNum=-1,tileId='001'):
     nodesf.close()
         
 
+def init_wmctrl():
+    client.send_server(ExecuteTS+' wmctrl -l -G')
+    print("Out of wmctrl : "+ str(client.get_OK()))
+
+if (stateVM):
+    init_wmctrl()
+
 def launch_changesize(RESOL="1920x1080",tileNum=-1,tileId='001'):
     if ( tileNum > -1 ):
         TilesStr=' Tiles=('+containerId(tileNum+1)+') '
@@ -300,13 +347,13 @@ def get_windows():
     print("Out of wmctrl : "+ str(client.get_OK()))
 get_windows()
 
-def fullscreenApp(windowname="glxgears",tileNum=-1):
+def fullscreenApp(windowname="paraview",tileNum=-1):
     fullscreenThisApp(App=windowname,tileNum=tileNum)
 
-def movewindows(windowname="glxgears",wmctrl_option='toggle,fullscreen',tileNum=-1,tileId='001'):
+def movewindows(windowname="paraview",wmctrl_option='toggle,fullscreen',tileNum=-1,tileId='001'):
     #remove,maximized_vert,maximized_horz
     #toggle,above
-    #movewindows(windowname='glxgears',wmctrl_option="toggle,fullscreen",tileNum=2)
+    #movewindows(windowname='paraview',wmctrl_option="toggle,fullscreen",tileNum=2)
     if ( tileNum > -1 ):
         TilesStr=' Tiles=('+containerId(tileNum+1)+') '
     else:
