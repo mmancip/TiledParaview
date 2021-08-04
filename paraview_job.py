@@ -231,7 +231,7 @@ sys.stdout.flush()
 
 def launch_one_client(script='paraview_client',tileNum=-1,tileId='001'):
     line=taglist.readline().split(' ')
-    dir_name=(line[2].split('='))[1].replace('"','')
+    dir_name=(line[2].split('='))[1].replace('"','').replace('\n','')
     COMMAND=' '+os.path.join(CASE_DOCKER_PATH,script)+' '+DATA_PATH_DOCKER+' '+dir_name
     if ( tileNum > -1 ):
         TilesStr=' Tiles=('+containerId(tileNum+1)+') '
@@ -255,7 +255,7 @@ sys.stdout.flush()
 def next_element(script='paraview_client',tileNum=-1,tileId='001'):
     line2=taglist.readline()
     line=line2.split(' ')
-    dir_name=(line[2].split('='))[1].replace('"','')
+    dir_name=(line[2].split('='))[1].replace('"','').replace('\n','')
     COMMAND=' '+os.path.join(CASE_DOCKER_PATH,script)+' '+DATA_PATH_DOCKER+' '+dir_name
     COMMANDKill=' killall -9 paraview'
     if ( tileNum > -1 ):
@@ -347,13 +347,13 @@ def get_windows():
     print("Out of wmctrl : "+ str(client.get_OK()))
 get_windows()
 
-def fullscreenApp(windowname="paraview",tileNum=-1):
+def fullscreenApp(windowname="ParaView",tileNum=-1):
     fullscreenThisApp(App=windowname,tileNum=tileNum)
 
-def movewindows(windowname="paraview",wmctrl_option='toggle,fullscreen',tileNum=-1,tileId='001'):
+def movewindows(windowname="ParaView",wmctrl_option='toggle,fullscreen',tileNum=-1,tileId='001'):
     #remove,maximized_vert,maximized_horz
     #toggle,above
-    #movewindows(windowname='paraview',wmctrl_option="toggle,fullscreen",tileNum=2)
+    #movewindows(windowname='ParaView',wmctrl_option="toggle,fullscreen",tileNum=2)
     if ( tileNum > -1 ):
         TilesStr=' Tiles=('+containerId(tileNum+1)+') '
     else:
