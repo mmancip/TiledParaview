@@ -1,7 +1,7 @@
 #!/bin/bash
 
 CASE_NAME=UNKNOWN
-NOVNC_URL='http://mycuster/kanaka-noVNC-33e1462/vnc_auto.html'
+NOVNC_URL='https://mycluster/kanaka-noVNC-33e1462/vnc_auto.html'
 
 CASE_SCRIPT=$(realpath ${1:-case_config.ini})
 SITE_SCRIPT=$(realpath ${2:-site_config.ini})
@@ -53,7 +53,7 @@ echo '{ "nodes": [' > nodes.json
 i=0
 while IFS='' read -r -u3 line && IFS='' read -r -u4 line2 || [[ -n "$line" ]]; do
   if [ X"${line}" == X"" ]; then  
-      echo "error too old passord file."
+      echo "error too old password file."
       rm -f nodes.json
       exit 2
   fi
@@ -92,7 +92,7 @@ while IFS='' read -r -u3 line && IFS='' read -r -u4 line2 || [[ -n "$line" ]]; d
   echo '  "variable" : "ID-'$i0'_'$file_name'",' >> nodes.json
 
   URL=$(echo $NOVNC_URL | envsubst) # expand envars in $NOVNC_URL
-  echo ' "url" : "'${URL}'?host='${HTTP_FRONTEND}'&port='${SOCKETdomain}${i0}'&encrypt=0&password='${pass}'&true_color=1",' >> nodes.json
+  echo ' "url" : "'${URL}'?autoconnect=1&host='${HTTP_FRONTEND}'&port='${SOCKETdomain}${i0}'&encrypt=1&password='${pass}'&true_color=1",' >> nodes.json
   echo ' "comment" : "'$( echo $line2| sed -e s/\"//g )' '${DATE}'",' >> nodes.json
   echo ' "usersNotes"  : "This is node '$i'  : Docker host '${thishost}' and noVNC server for file '${file_name}'",' >> nodes.json
   echo ' "tags"  : ["'$TileSet'"],' >> nodes.json
